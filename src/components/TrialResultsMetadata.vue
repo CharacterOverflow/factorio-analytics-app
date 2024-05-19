@@ -111,7 +111,6 @@ function clickSortItemProd() {
   const cat = categoryOrDefault.value
   let md = JSON.parse(JSON.stringify(metadataBak.value))
 
-  console.log(md[cat])
   // md here needs to go into md[0].key for the description
   if (filterInput.value != '')
     md[cat] = md[cat].filter((item: any) => item.key.toLowerCase().includes(filterInput.value.toLowerCase()))

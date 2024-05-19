@@ -117,9 +117,9 @@ watch(() => props.refresh, (value) => {
   }
 })
 
-function onChartRender(chart) {
-  console.log(chart)
-}
+// function onChartRender(chart) {
+//   console.log(chart)
+// }
 
 function refreshChart() {
   // need to figure out how to do this part - i think turning off  a v-if for the chart and 500ms later turning it back on
