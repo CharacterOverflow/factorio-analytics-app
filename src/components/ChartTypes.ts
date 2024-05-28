@@ -1,18 +1,21 @@
 export interface IChartDatasetConfig extends IChartDatasetTemplate {
   label: string,
-  //smooth: number,
-  borderColor: string,
-  tension: number,
-  //raw_data: number[],
-  data: number[],
-  hidden?: boolean,
   variant?: string,
   field?: string,
+  borderColor: string,
+  tension?: number,
+  data: number[],
+  hidden?: boolean,
 }
 
 export interface IChartDatasetTemplate {
+  // core parts of how we identify the data
   label: string,
-  borderColor: string,
   variant?: string,
   field?: string,
+
+  // display variables
+  borderColor: string,
+  displayName?: string,
+  showAsNegative?: boolean,
 }

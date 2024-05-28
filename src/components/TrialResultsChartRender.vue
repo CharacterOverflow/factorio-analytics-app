@@ -168,15 +168,12 @@ function exportChart() {
       <q-icon class="q-pl-xs" name="analytics"></q-icon>
     </q-badge>
     <q-btn-group>
-      <q-btn color="primary" @click="refreshChart" :loading="refreshing">
-        Refresh Chart
-      </q-btn>
       <q-btn color="secondary" @click="exportChart()">Export</q-btn>
     </q-btn-group>
   </div>
   <div class="full-width chartConstraint">
 
-    <Line ref="chartRef" @chart:render="onChartRender" class="full-height"
+    <Line ref="chartRef" class="full-height"
           v-if="!(!props.data?.id || !props.chartConfigs || !props.chartOptions || refreshing)"
           :data="props.chartConfigs"
           :options="props.chartOptions"></Line>

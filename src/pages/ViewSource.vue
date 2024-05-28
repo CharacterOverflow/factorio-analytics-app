@@ -4,12 +4,11 @@ import {onMounted, ref} from "vue";
 import {useQuasar} from "quasar";
 import {ISource, ITrial} from "factorio-analytics";
 import TrialBasicInfoCard from "components/TrialBasicInfoCard.vue";
-import SourceBlueprintView from "components/SourceBlueprintView.vue";
 import TrialResultsMetadata from "components/TrialResultsMetadata.vue";
-import TrialResultsChartRender from "components/TrialResultsChartRender.vue";
-import TrialResultsChartBuilder from "components/TrialResultsChartBuilder.vue";
 import {IChartDatasetTemplate} from "components/ChartTypes";
 import {useDatasets} from "stores/datasets";
+import NewChartBuilder from "components/NewChartBuilder.vue";
+import TrialResultItemMeta from "components/metadata/TrialResultItemMeta.vue";
 
 const props = defineProps<{
   id: string
@@ -43,13 +42,7 @@ onMounted(() => {
         startTickUntilTrialIsDone()
       }
       if (TrialLocal.value?.id) {
-        Promise.allSettled([
-          datasets.loadDataset(TrialLocal.value?.id, 'item', TrialLocal.value?.tickInterval ?? 60),
-          datasets.loadDataset(TrialLocal.value?.id, 'electric', TrialLocal.value?.tickInterval ?? 60),
-          datasets.loadDataset(TrialLocal.value?.id, 'circuit', TrialLocal.value?.tickInterval ?? 60),
-          datasets.loadDataset(TrialLocal.value?.id, 'pollution', TrialLocal.value?.tickInterval ?? 60),
-          datasets.loadDataset(TrialLocal.value?.id, 'system', TrialLocal.value?.tickInterval ?? 60)
-        ]).then(() => {
+        loadData().then(() => {
           loadedTrial.value = true
         })
       }
@@ -67,12 +60,22 @@ onMounted(() => {
   }
 })
 
+async function loadData() {
+  if (TrialLocal.value?.id) {
+    await Promise.allSettled([
+      datasets.loadDataset(TrialLocal.value?.id, 'item', TrialLocal.value?.tickInterval ?? 60),
+      datasets.loadDataset(TrialLocal.value?.id, 'electric', TrialLocal.value?.tickInterval ?? 60),
+      datasets.loadDataset(TrialLocal.value?.id, 'circuit', TrialLocal.value?.tickInterval ?? 60),
+      datasets.loadDataset(TrialLocal.value?.id, 'pollution', TrialLocal.value?.tickInterval ?? 60),
+      datasets.loadDataset(TrialLocal.value?.id, 'system', TrialLocal.value?.tickInterval ?? 60)
+    ])
+  }
+}
+
 const loadedSource = ref(false)
 const loadedTrial = ref(false)
-const hideMetadata = ref(false)
 
-const selectedTab = ref('item')
-const viewTextLogs = ref(false)
+const selectedTab = ref('info')
 const loadingAmt = ref(0)
 const interval = ref<any>()
 
@@ -105,6 +108,13 @@ function startTickUntilTrialIsDone() {
           loadingAmt.value = 1
         } else
           loadingAmt.value = .75
+
+        if (loadingAmt.value == 1) {
+          loadData().then(() => {
+            loadedTrial.value = true
+          })
+        }
+
       }).catch((error) => {
         // do something with the error
         loadedTrial.value = true
@@ -137,78 +147,72 @@ function startTickUntilTrialIsDone() {
           >
 
           </TrialBasicInfoCard>
-          <q-btn @click="viewTextLogs = true" color="secondary" class="full-width">View Text Logs</q-btn>
-          <q-dialog v-model="viewTextLogs">
-            <q-card>
-              <q-card-section>
-                <q-list dense>
-                  <q-item v-for="(log, idx) in TrialLocal.textLogs" :key="log">
-                    <q-item-section side>
-                      <q-badge>
-                        {{idx}}
-                      </q-badge>
-                    </q-item-section>
-                    <q-item-section>
-                      <q-item-label>{{log}}</q-item-label>
-                    </q-item-section>
-                  </q-item>
-                </q-list>
-              </q-card-section>
-            </q-card>
-          </q-dialog>
         </q-card-section>
       </q-card>
-      <q-card
-        v-if="!hideMetadata && loadedTrial && (TrialLocal.itemMetadata?.total?.length > 0 || TrialLocal.circuitMetadata?.total?.length > 0 || (TrialLocal.electricMetadata?.avg && Object.keys(TrialLocal.electricMetadata.avg).length > 0))"
-        class="col q-mb-lg">
+      <q-card class="col q-mb-lg">
         <q-card-section>
-          <q-tabs active-color="white" active-bg-color="secondary" align="left" dense v-model="selectedTab">
-            <q-badge icon-right="tag"
-                     color="secondary" class="q-pr-sm q-mr-md text-subtitle1">METADATA
-              <q-icon class="q-pl-xs" name="summarize"></q-icon>
-            </q-badge>
-            <q-tab name="item" label="Items"/>
-            <q-tab name="electric" label="Electric"></q-tab>
-            <q-tab name="circuit" label="Circuits"/>
-            <q-tab name="pollution" label="Pollution"/>
-            <q-tab name="system" label="System"/>
+          <q-tabs align="left" active-bg-color="primary" active-color="white" v-model="selectedTab">
+            <q-tab name="info" label="Info"></q-tab>
+            <q-tab name="logs" label="Text Logs"></q-tab>
           </q-tabs>
-          <TrialResultsMetadata
-            :datasets="datasetTemplates"
-            @datasets="(ds) => {setDatasetTemplates(ds)}"
-            :data="TrialLocal"
-            :variant="selectedTab"
-          />
+          <q-tab-panels v-model="selectedTab">
+            <q-tab-panel name="info">
+              info here
+            </q-tab-panel>
+            <q-tab-panel name="logs">
+              <q-virtual-scroll
+                v-if="TrialLocal.textLogs"
+                style="max-height: 40em; min-height: 26em"
+                :items="TrialLocal.textLogs.map((str, idx) => {
+            return {key: idx, value: str}
+          })"
+                v-slot="{item, idx}">
+                <q-item :key="idx">
+                  <q-item-section side>
+                    <q-badge>
+                      {{ item.key }}
+                    </q-badge>
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>{{ item.value }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-virtual-scroll>
+            </q-tab-panel>
+          </q-tab-panels>
         </q-card-section>
       </q-card>
-      <q-card  class="col q-mb-lg" v-else-if="!hideMetadata && loadedTrial">
-        <q-card-section>
-          <div class="text-h5">Please Verify your Blueprint</div>
-          <div class="text-caption">No metadata found. Something went wrong</div>
-        </q-card-section>
-        <q-card-section>
-          <q-list>
-            <q-item>
-              <q-item-section side avatar>
-                <q-icon color="negative" name="warning"></q-icon>
-              </q-item-section>
-              <q-item-section>
-                <q-item-label overline>Item Metadata not found</q-item-label>
-                <q-item-label>No item or circuit results were found, but the trial did run. Check that your blueprint has required electric-energy-interfaces (infinity power) and infinity chests to function. Submit a new blueprint after you have done so</q-item-label>
-              </q-item-section>
-            </q-item>
-          </q-list>
-        </q-card-section>
-      </q-card>
+      <!--      <q-card class="col q-mb-lg" v-if="!hideMetadata && loadedTrial">-->
+      <!--        <q-card-section>-->
+      <!--          <div class="text-h5">Please Verify your Blueprint</div>-->
+      <!--          <div class="text-caption">No metadata found. Something went wrong</div>-->
+      <!--        </q-card-section>-->
+      <!--        <q-card-section>-->
+      <!--          <q-list>-->
+      <!--            <q-item>-->
+      <!--              <q-item-section side avatar>-->
+      <!--                <q-icon color="negative" name="warning"></q-icon>-->
+      <!--              </q-item-section>-->
+      <!--              <q-item-section>-->
+      <!--                <q-item-label overline>Item Metadata not found</q-item-label>-->
+      <!--                <q-item-label>No item or circuit results were found, but the trial did run. Check that your blueprint has required electric-energy-interfaces (infinity power) and infinity chests to function. Submit a new blueprint after you have done so</q-item-label>-->
+      <!--              </q-item-section>-->
+      <!--            </q-item>-->
+      <!--          </q-list>-->
+      <!--        </q-card-section>-->
+      <!--      </q-card>-->
     </div>
-    <div v-if="TrialLocal && loadedTrial && (TrialLocal.itemMetadata?.total?.length > 0 || TrialLocal.circuitMetadata?.total?.length > 0 || TrialLocal.electricMetadata?.avg?.length > 0)" class="row q-gutter-lg">
+    <div
+      v-if="TrialLocal && loadedTrial && (TrialLocal.itemMetadata?.total?.length > 0 || TrialLocal.circuitMetadata?.total?.length > 0 || TrialLocal.electricMetadata?.avg?.length > 0)"
+      class="row q-gutter-lg">
       <!--div>chart master view component here</div-->
       <q-card class="col q-gutter-lg q-pt-lg">
         <q-card-section class="q-pt-sm q-mt-none q-pl-sm q-pr-sm">
-          <TrialResultsChartBuilder
-            @templates="(ds) => {setDatasetTemplates(ds)}"
-            :templates="datasetTemplates"
-            :data="TrialLocal" ></TrialResultsChartBuilder>
+          <NewChartBuilder :data="TrialLocal"></NewChartBuilder>
+          <!--          <TrialResultsChartBuilder-->
+          <!--            @templates="(ds) => {setDatasetTemplates(ds)}"-->
+          <!--            :templates="datasetTemplates"-->
+          <!--            :data="TrialLocal" ></TrialResultsChartBuilder>-->
         </q-card-section>
       </q-card>
     </div>
@@ -217,8 +221,8 @@ function startTickUntilTrialIsDone() {
     <q-card>
       <q-card-section class="text-center full-width">
         <span class="text-h5 text-bold text-uppercase">Blueprint running</span>
-        <br />
-        <span class="text-caption text-uppercase" v-if="TrialLocal">STAGE: {{TrialLocal?.stage}}</span>
+        <br/>
+        <span class="text-caption text-uppercase" v-if="TrialLocal">STAGE: {{ TrialLocal?.stage }}</span>
       </q-card-section>
       <q-card-section>
         <q-linear-progress indeterminate v-model:value="loadingAmt" class="full-width"></q-linear-progress>

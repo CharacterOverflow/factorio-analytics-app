@@ -9,6 +9,7 @@
 import {ITrial} from "factorio-analytics";
 import {computed, ref, type PropType, onMounted, watch} from "vue";
 import {IChartDatasetTemplate} from "components/ChartTypes";
+import {useDatasets} from "stores/datasets";
 
 // define a type that can be used for the Vue 3 props below typescript setup
 // the type should have options 'ITEM', 'ELEC', 'CIRC', 'POLL', 'SYS', 'ALL'
@@ -22,10 +23,6 @@ const props = defineProps({
   variant: {
     type: String, //MetadataType,
     required: true
-  },
-  datasets: {
-    type: Object as PropType<IChartDatasetTemplate[]>,
-    require: true
   }
 })
 
@@ -313,8 +310,12 @@ const filterInput = computed({
   }
 })
 
+const datasets = useDatasets();
+
 function addDatasetTemplate(variant: string, label: string, field: string) {
-  emit('datasets', [...(props.datasets ?? []), {variant: variant, label: label, field: field, borderColor: '#000'}])
+  // lets find the data we need for this
+
+  datasets.addDatasetToChart({variant: variant, label: label, field: field, borderColor: '#000', data: []})
 }
 
 </script>
@@ -322,8 +323,7 @@ function addDatasetTemplate(variant: string, label: string, field: string) {
 <template>
   <div>
     <q-card-section v-if="props.variant == 'item' && metadata?.total">
-
-      <span>All Item data is per-second</span>
+      <span>All Item data is per-second. Click '+' to add respective data to chart</span>
       <q-badge color="secondary" class="rounded-top q-pl-sm q-pr-sm full-width text-center text-caption">
         <div class="text-center full-width">Item Metadata</div>
         <q-tooltip class="bg-primary" anchor="top middle" self="bottom middle" :offset="[10, 10]">

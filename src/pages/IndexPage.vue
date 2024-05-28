@@ -21,6 +21,10 @@
             </li>
             <li>
               <q-icon name="check" color="green"></q-icon>
+              Record and analyze electric network data
+            </li>
+            <li>
+              <q-icon name="check" color="green"></q-icon>
               Record and analyze the state of the circuit network
             </li>
             <li>
@@ -30,10 +34,6 @@
             <li>
               <q-icon name="check" color="green"></q-icon>
               Record and analyze system performance data
-            </li>
-            <li>
-              <q-icon name="cancel" color="red"></q-icon>
-              CANNOT Record and analyze the electric networks (yet; more testing needed)
             </li>
             <li>
               <q-icon name="cancel" color="red"></q-icon>

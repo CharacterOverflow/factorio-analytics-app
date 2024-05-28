@@ -12,10 +12,6 @@ const props = defineProps({
   data: {
     type: Object as PropType<ITrial>,
     required: true
-  },
-  templates: {
-    type: Array as PropType<IChartDatasetTemplate[]>,
-    required: true
   }
 })
 
@@ -39,7 +35,7 @@ const preparedTemplateDatasets = ref<IChartDatasetConfig[]>([])
 
 const addingNewLine = ref(false)
 
-watch(() => props.templates, (value, oldValue) => {
+watch(() => datasets.chartData, (value, oldValue) => {
   if (value !== oldValue && value.length !== oldValue?.length) {
     generateChart()
   }
@@ -76,30 +72,26 @@ async function loadData() {
     loading.value = false;
   }
 }
+
 const isDefault = ref(true)
 
 function generateChart() {
   try {
-    if (!props.data?.id)
+    if (!props.data?.id || !props.data?.tickInterval || !props.data?.length)
       return
 
-    // the labels will just be the x axis unique ticks
-    let val = _.uniqBy(datasets.trialItemData.get(props.data?.id).data, 'tick')
-
-    const xLabels = val.map((v: any) => {
-      return tickToTime(v.tick)
-    }).sort((a, b) => a - b)
+    let xLabels = datasets.getLabels(props.data.tickInterval, props.data.length)
     let xSmoothedLabels: number[] | string[] = [];
 
-    let options = generateOptions();
+    let options = datasets.getOptions()
 
-    if (props.templates?.length === 0) {
+    if (datasets.chartData?.length === 0) {
       // no defaults - its easy enough to add your own now
 
     } else {
       preparedTemplateDatasets.value = []
-      for(let i = 0; i < props.templates?.length; i++) {
-        let template = props.templates[i]
+      for (let i = 0; i < datasets.chartData?.length; i++) {
+        let template = datasets.chartData[i]
 
         if (template.variant == 'item' && props.data?.id) {
           let data = _.chain(datasets.trialItemData.get(props.data?.id).data)
@@ -114,10 +106,10 @@ function generateChart() {
                 return v?.count ?? v
             })
             .value()
-          if (smooth.value >= 1) {
+          if (datasets.chartSmoothing >= 1) {
             // call datasets.smoothData but this takes an array of x values (tick) and an array of y values (cons or prod)
             // we have the y values, x values are just our labels in general
-            let smoothed = datasets.smoothData(xLabels, data, smooth.value);
+            let smoothed = datasets.smoothData(xLabels, data, datasets.chartSmoothing);
             data = smoothed.yArr
             xSmoothedLabels = smoothed.xArr
           }
@@ -199,12 +191,10 @@ function generateChart() {
           dataset.tension = .1
           preparedTemplateDatasets.value.push(dataset)
         }
-
-
       }
     }
 
-    if (smooth.value >= 1) {
+    if (datasets.chartSmoothing >= 1) {
       renderChart(xSmoothedLabels, options)
     } else {
       renderChart(xLabels, options)
@@ -214,10 +204,8 @@ function generateChart() {
   }
 }
 
-function renderChart(labels: string[] | number[], options: any) {
+function renderChart() {
   // emit our prepared datasets now
-  emit('templates', preparedTemplateDatasets.value)
-
   cachedData.value = {
     labels: labels,
     datasets: preparedTemplateDatasets.value
@@ -229,80 +217,26 @@ function tickToTime(tick: number) {
   return (tick / 60) / 60
 }
 
-function generateOptions() {
-  // options will grab all values and other inputs and turn it into 1 cohesive chartjs options object
-
-  // at the end, if no options, generate defaults
-  return generateDefaultOptions()
-}
-
 function generateDefaultLabels() {
-  // we also use this function to make changes/adjustments to axis labels. Should be called after generateOptions
-  let val = _.uniqBy(datasets.trialItemData.get(props.data?.id).data, 'tick')
+  // lets redo this and actually just generate the data we need
+  // it will start at tick 0, adding by interval each new record, until we hit the 'length'
+  /// if we will exceed length, we will stop at length
+  let ret = [];
 
-  return val.map((v: any) => {
+  if (props.data?.length && props.data?.tickInterval) {
+    for (let i = 0; i < props.data.length; i += props.data.tickInterval) {
+      ret.push(i)
+    }
+    // if the last record is > props.data.length, set it to props.data.length
+    if (ret[ret.length - 1] > props.data.length)
+      ret[ret.length - 1] = props.data.length
+  }
+  return ret.map((v: any) => {
     return tickToTime(v.tick)
   }).sort((a, b) => a - b)
+
 }
 
-function generateDefaultOptions() {
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        labels: {
-          // This more specific font property overrides the global property
-          font: {
-            size: 18
-          }
-        },
-        display: true,
-        position: 'bottom'
-      }
-    },
-    scales: {
-      x: {
-        title: {
-          display: true,
-          text: 'Simulation Time (minutes)',
-          font: {
-            size: 20
-          }
-        },
-        type: 'linear',
-        position: 'bottom',
-        ticks: {
-          font: {
-            size: 10
-          }
-        }
-      },
-      y: {
-        title: {
-          display: true,
-          text: 'Count',
-          font: {
-            size: 20
-          }
-        },
-        grid: {
-          color: 'rgba(0,0,0,0.53)',
-          drawTicks: false,
-        },
-        ticks: {
-          font: (context) => ({
-            size: context.tick?.value === 0 ? 20 : 10,
-            weight: context.tick?.value === 0 ? 'bold' : undefined
-          }),
-          callback: (value) => {
-            return value
-          }
-        }
-      }
-    }
-  }
-}
 //
 // function generateDefaultDatasets(): any[] {
 //
@@ -375,7 +309,7 @@ function onChartChangesMade(idx: number = -1, chart: IChartDatasetConfig) {
     preparedTemplateDatasets.value = [...preparedTemplateDatasets.value]
   }
   // refresh our chart as well (redraw)
-  renderChart(generateDefaultLabels(), generateOptions())
+  renderChart(generateDefaultLabels(), datasets.finalOptions)
 }
 
 function onChartDelete(idx: number = -1, chart: IChartDatasetConfig) {
@@ -389,7 +323,7 @@ function onChartDelete(idx: number = -1, chart: IChartDatasetConfig) {
     })
 
     // refresh our chart as well (redraw)
-    renderChart(generateDefaultLabels(), generateOptions())
+    renderChart(generateDefaultLabels(), datasets.finalOptions)
   }
 }
 
@@ -405,16 +339,10 @@ function onChartDelete(idx: number = -1, chart: IChartDatasetConfig) {
 
 function clearChart() {
   preparedTemplateDatasets.value = []
-  renderChart( [], generateDefaultOptions())
+  renderChart([], datasets.finalOptions)
 }
 
-function startAddNewLine() {
-  addingNewLine.value = true
-}
-
-const newPendingLine = ref<IChartDatasetConfig | undefined>()
 const refreshChart = ref(false)
-const smooth = ref(0)
 
 onMounted(() => {
   loadData()
@@ -425,70 +353,42 @@ onMounted(() => {
 
 <template>
   <div>
-    <div v-if="(!cachedData || cachedData?.labels?.length === 0)">
-      <q-btn
-        @click="loadData"
-        :loading="loading"
-        label="Load Data"
-        color="secondary"
-      ></q-btn>
-    </div>
     <div v-if="props.data?.id">
-      <TrialResultsChartRender @refresh="refreshChart = false" v-model:refresh="refreshChart" class="chartConstraint" :data="props.data" :chart-options="cachedOptions"
+      <TrialResultsChartRender @refresh="refreshChart = false"
+                               v-model:refresh="refreshChart"
+                               class="chartConstraint"
+                               :data="props.data"
+                               :chart-options="cachedOptions"
                                :chart-configs="cachedData"></TrialResultsChartRender>
       <div>
-        <q-list separator >
-          <!--q-item v-for="(line, idx) in datasetsList" :key="line.label">
-            {{line}}
-          </q-item-->
-<!--          <q-expansion-item-->
-<!--            v-if="datasetsList?.length > 0"-->
-<!--            switch-toggle-side-->
-<!--            :content-inset-level="2"-->
-<!--            :header-style="{-->
-<!--              backgroundColor: `${colors.lighten(line.borderColor, 50) ?? '#c4c4c4'}`,-->
-<!--            }"-->
-<!--            group="chart"-->
-<!--            v-for="(line, idx) in datasetsList"-->
-<!--            :key="idx">-->
-<!--            <template v-slot:header="scope">-->
-<!--              <q-item-section avatar side>-->
-<!--                <q-icon name="square"-->
-<!--                        :style="{backgroundColor: `${scope.expanded ? '#000000' : ''}` , color: `${line.borderColor ?? '#000000'}`,}"></q-icon>-->
-<!--              </q-item-section>-->
-<!--              <q-item-section>-->
-<!--                <q-item-label overline>Item (Field)</q-item-label>-->
-<!--                <q-item-label>{{ line.label }}</q-item-label>-->
-<!--              </q-item-section>-->
-<!--              <q-item-section>-->
-<!--                <q-item-label> {{ line?.raw_data?.length }} Data Points</q-item-label>-->
-<!--              </q-item-section>-->
-<!--            </template>-->
-<!--            <TrialResultsChartConfig @delete="(val) => {onChartDelete(idx, val)}"-->
-<!--                                     @chart="(val) => {onChartChangesMade(idx, val)}" :chart="line"-->
-<!--                                     :data="props.data"></TrialResultsChartConfig>-->
-<!--          </q-expansion-item>-->
+        <q-list>
           <q-separator class="q-mb-lg"></q-separator>
           <q-item>
             <q-item-section class="text-center">
-              <q-item-label>Smoothing</q-item-label>
+              <q-item-label>Chart Title / Smoothing</q-item-label>
               <q-item-label caption>0 means smoothing disabled. Only ITEM data is smoothed</q-item-label>
             </q-item-section>
           </q-item>
           <q-item v-if="cachedData?.labels">
             <q-item-section>
-              <q-slider @change="generateChart()"  dense :min="0" :max="(cachedData.labels.length / 2)" label-always v-model="smooth"></q-slider>
+              <q-input @change="generateChart()" v-model="datasets.chartUserTitle" label="Chart Title" outlined></q-input>
+            </q-item-section>
+            <q-item-section class="q-pl-lg q-pr-lg">
+              <q-slider dense @change="generateChart()"
+                        :min="0" :max="(cachedData.labels.length / 2)"
+                        label-always
+                        v-model="datasets.chartSmoothing"></q-slider>
             </q-item-section>
           </q-item>
           <q-item
-                      :style="{
+            :style="{
                         backgroundColor: `${colors.lighten(line.borderColor, 50) ?? '#c4c4c4'}`,
                       }"
             v-for="(line, idx) in preparedTemplateDatasets"
-                              :key="idx">
+            :key="idx">
             <q-item-section>
               <q-item-label overline>Item (Field)</q-item-label>
-              <q-item-label>{{ line.label }} ({{line?.field ?? 'count'}})</q-item-label>
+              <q-item-label>{{ line.label }} ({{ line?.field ?? 'count' }})</q-item-label>
             </q-item-section>
             <q-item-section>
               <q-input
@@ -499,7 +399,7 @@ onMounted(() => {
                 <template v-slot:append>
                   <q-icon name="colorize" class="cursor-pointer">
                     <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-                      <q-color  @change="generateChart()" v-model="line.borderColor"  />
+                      <q-color @change="generateChart()" v-model="line.borderColor"/>
                     </q-popup-proxy>
                   </q-icon>
                 </template>
@@ -514,11 +414,11 @@ onMounted(() => {
           </q-item>
           <q-separator inset class="q-mt-sm q-mb-sm"></q-separator>
           <q-item>
-<!--            <q-item-section side>-->
-<!--              <q-btn-group>-->
-<!--                <q-btn @click="startAddNewLine()" color="primary">ADD LINE</q-btn>-->
-<!--              </q-btn-group>-->
-<!--            </q-item-section>-->
+            <!--            <q-item-section side>-->
+            <!--              <q-btn-group>-->
+            <!--                <q-btn @click="startAddNewLine()" color="primary">ADD LINE</q-btn>-->
+            <!--              </q-btn-group>-->
+            <!--            </q-item-section>-->
             <q-item-section>
 
             </q-item-section>
@@ -529,9 +429,9 @@ onMounted(() => {
 
         </q-list>
       </div>
-<!--      <q-dialog full-width v-model="addingNewLine">-->
-<!--        <TrialResultsChartLineAdd @chart="args => {onAddNewLine(args)}" v-model:chart="newPendingLine" :data="props.data"></TrialResultsChartLineAdd>-->
-<!--      </q-dialog>-->
+      <!--      <q-dialog full-width v-model="addingNewLine">-->
+      <!--        <TrialResultsChartLineAdd @chart="args => {onAddNewLine(args)}" v-model:chart="newPendingLine" :data="props.data"></TrialResultsChartLineAdd>-->
+      <!--      </q-dialog>-->
     </div>
     <div>
 

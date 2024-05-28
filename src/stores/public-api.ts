@@ -24,7 +24,7 @@ export const usePublicApi = defineStore('public', {
     sourceMap: new Map<string, ISource>(),
     trialList: [] as string[],
     maxTrials: 5,
-    devMode: false
+    devMode: true
   } as publicState),
   getters: {},
   actions: {
